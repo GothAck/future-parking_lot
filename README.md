@@ -1,6 +1,6 @@
 # future-parking_lot
 
-This is an "as simple as possible" Future implementation for [parking_lot](https://docs.rs/parking_lot/0.9.0/parking_lot/).
+This is an "as simple as possible" Future implementation for [parking_lot](https://docs.rs/parking_lot/latest/parking_lot/).
 Thanks to async/await feature, now it works directly on `Mutex<T>` and `RwLock<T>`.
 
 Example:
