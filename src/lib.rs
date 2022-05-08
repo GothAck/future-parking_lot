@@ -18,3 +18,10 @@ pub mod rwlock;
 
 //Re-export `parking_lot` to avoid version mismatch
 pub use parking_lot;
+
+pub(crate) fn map_atomic_bool_compare_exchange_result(result: Result<bool, bool>) -> bool {
+    match result {
+        Ok(value) => value,
+        Err(value) => value,
+    }
+}

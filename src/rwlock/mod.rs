@@ -45,9 +45,9 @@ where
     // * thread 2 register waker
     // this creates a situation similar to a deadlock, where the future isn't waked up by nobody
     fn atomic_lock(&self) {
-        while self
+        while crate::map_atomic_bool_compare_exchange_result(self
             .locking
-            .compare_and_swap(false, true, Ordering::Relaxed)
+            .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed))
         {}
     }
 
