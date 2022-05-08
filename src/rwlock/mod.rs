@@ -119,6 +119,7 @@ mod tests {
     use std::rc::Rc;
     use std::sync::Arc;
 
+    use futures::future::join_all;
     use tokio::runtime::{Builder, Runtime};
 
     use super::{
@@ -136,10 +137,10 @@ mod tests {
     }
 
     fn thread_rt() -> Runtime {
-        Builder::new().basic_scheduler().build().unwrap()
+        Builder::new_current_thread().build().unwrap()
     }
     fn threadpool_rt() -> Runtime {
-        Builder::new().threaded_scheduler().build().unwrap()
+        Builder::new_multi_thread().build().unwrap()
     }
 
     #[test]
@@ -272,20 +273,21 @@ mod tests {
     fn multithread_concurrent_lazy_static() {
         env_logger::try_init().ok();
 
-        threadpool_rt().block_on(async {
-            // spawn 10 concurrent futures
-            for i in 0..100 {
-                tokio::spawn(async move {
-                    {
-                        let mut v = CONCURRENT_LOCK.future_write().await;
-                        v.push(i.to_string());
-                    }
+        let runtime = threadpool_rt();
 
-                    let v = CONCURRENT_LOCK.future_read().await;
-                    info!("{}, pushed {}", v.len(), i);
-                });
-            }
-        });
+        let handles = (0..100)
+            .map(|i| runtime.spawn(async move {
+                {
+                    let mut v = CONCURRENT_LOCK.future_write().await;
+                    v.push(i.to_string());
+                }
+
+                let v = CONCURRENT_LOCK.future_read().await;
+                info!("{}, pushed {}", v.len(), i);
+            }));
+
+        runtime.block_on(join_all(handles));
+
         let singleton = CONCURRENT_LOCK.read();
         assert_eq!(singleton.len(), 100);
     }
@@ -296,11 +298,12 @@ mod tests {
 
         let lock = Arc::new(RwLock::new(HashMap::new()));
 
-        threadpool_rt().enter(|| {
-            // spawn 10 concurrent futures
-            for i in 0usize..100 {
+        let runtime = threadpool_rt();
+
+        let handles = (0..100)
+            .map(|i| {
                 let lock = lock.clone();
-                tokio::spawn(async move {
+                runtime.spawn(async move {
                     let guard = lock.future_upgradable_read().await;
                     if i % 2 == 0 {
                         let mut guard = FutureUpgradable::future_upgrade(guard).await;
@@ -313,9 +316,11 @@ mod tests {
                             assert_eq!(item, key)
                         }
                     }
-                });
-            }
-        });
+                })
+            });
+
+        runtime.block_on(join_all(handles));
+
         let data = lock.read();
         assert_eq!(data.len(), 50);
     }

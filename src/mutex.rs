@@ -159,6 +159,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
+    use futures::future::join_all;
     use tokio::runtime::{Builder, Runtime};
 
     use super::Mutex;
@@ -176,17 +177,17 @@ mod tests {
     }
 
     fn thread_rt() -> Runtime {
-        Builder::new().basic_scheduler().build().unwrap()
+        Builder::new_current_thread().build().unwrap()
     }
     fn threadpool_rt() -> Runtime {
-        Builder::new().threaded_scheduler().build().unwrap()
+        Builder::new_multi_thread().build().unwrap()
     }
 
     #[test]
     fn current_thread_lazy_static() {
         env_logger::try_init().ok();
 
-        let mut runtime = thread_rt();
+        let runtime = thread_rt();
         runtime.block_on(async {
             let mut v = LOCK1.future_lock().await;
             v.push(String::from("It works!"));
@@ -199,7 +200,7 @@ mod tests {
         env_logger::try_init().ok();
 
         let lock = Arc::new(Mutex::new(Vec::new()));
-        let mut runtime = thread_rt();
+        let runtime = thread_rt();
         runtime.block_on(async {
             let mut v = lock.future_lock().await;
             v.push(String::from("It works!"));
@@ -212,7 +213,7 @@ mod tests {
         env_logger::try_init().ok();
 
         let lock = Rc::new(Mutex::new(Vec::new()));
-        let mut runtime = thread_rt();
+        let runtime = thread_rt();
         runtime.block_on(async {
             let mut v = lock.future_lock().await;
             v.push(String::from("It works!"));
@@ -225,7 +226,7 @@ mod tests {
         env_logger::try_init().ok();
 
         let lock = Box::new(Mutex::new(Vec::new()));
-        let mut runtime = thread_rt();
+        let runtime = thread_rt();
         runtime.block_on(async {
             let mut v = lock.future_lock().await;
             v.push(String::from("It works!"));
@@ -237,7 +238,7 @@ mod tests {
     fn multithread_lazy_static() {
         env_logger::try_init().ok();
 
-        let mut runtime = threadpool_rt();
+        let runtime = threadpool_rt();
         runtime.block_on(async {
             let mut v = LOCK2.future_lock().await;
             v.push(String::from("It works!"));
@@ -250,7 +251,7 @@ mod tests {
         env_logger::try_init().ok();
 
         let lock = Arc::new(Mutex::new(Vec::new()));
-        let mut runtime = threadpool_rt();
+        let runtime = threadpool_rt();
         runtime.block_on(async {
             let mut v = lock.future_lock().await;
             v.push(String::from("It works!"));
@@ -263,7 +264,7 @@ mod tests {
         env_logger::try_init().ok();
 
         let lock = Rc::new(Mutex::new(Vec::new()));
-        let mut runtime = threadpool_rt();
+        let runtime = threadpool_rt();
         runtime.block_on(async {
             let mut v = lock.future_lock().await;
             v.push(String::from("It works!"));
@@ -276,7 +277,7 @@ mod tests {
         env_logger::try_init().ok();
 
         let lock = Box::new(Mutex::new(Vec::new()));
-        let mut runtime = threadpool_rt();
+        let runtime = threadpool_rt();
         runtime.block_on(async {
             let mut v = lock.future_lock().await;
             v.push(String::from("It works!"));
@@ -289,16 +290,17 @@ mod tests {
         env_logger::try_init().ok();
 
         let runtime = threadpool_rt();
-        runtime.enter(|| {
-            // spawn 1000 concurrent futures
-            for i in 0..1000 {
-                tokio::spawn(async move {
-                    let mut v = CONCURRENT_LOCK.future_lock().await;
-                    v.push(i.to_string());
-                    debug!("{}, pushed {}", v.len(), i);
-                });
-            }
-        });
+
+        // spawn 1000 concurrent futures
+        let handles = (0..1000)
+            .map(|i: usize| runtime.spawn(async move {
+                let mut v = CONCURRENT_LOCK.future_lock().await;
+                v.push(i.to_string());
+                debug!("{}, pushed {}", v.len(), i);
+            }));
+
+        runtime.block_on(join_all(handles));
+
         // fails if you drop it normally, takes as long as the Duration you give it for shutdown_timeout
         // maybe cause it's 1000 while the others are 100?
         runtime.shutdown_timeout(Duration::from_millis(500));

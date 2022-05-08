@@ -19,9 +19,10 @@ pin-project-lite = "0.2.9"
 [dev-dependencies]
 parking_lot = { version = "0.12", features = ["send_guard"] }
 lazy_static = "1.4"
-tokio = { version = "0.2", features = ["rt-core", "rt-threaded"] }
+tokio = { version = "1.18", features = ["rt", "rt-multi-thread", "macros"] }
 log = "0.4"
 env_logger = "0.9"
+futures = "0.3"
 
 [patch.crates-io]
 crossbeam-queue = { git = "https://github.com/crossbeam-rs/crossbeam" }
