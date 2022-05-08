@@ -26,3 +26,6 @@ futures = "0.3"
 
 [patch.crates-io]
 crossbeam-queue = { git = "https://github.com/crossbeam-rs/crossbeam" }
+
+[features]
+send_guard = ["parking_lot/send_guard"]
